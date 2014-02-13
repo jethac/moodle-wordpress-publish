@@ -17,7 +17,7 @@ class helper_wordpress_xmlrpc
         // use the first blog we find at that wordpress url
         // @todo: wordpress multi-blog support?
         $this->m_keys['blog_id'] = $this->useBlog();
-        echo 'blog id:' . $this->m_keys['blog_id'];
+        echo 'blog id:' . $this->m_keys['blog_id'] . '<br/>';
 
         // get the user id        
         $foo = $this->getUserId();
@@ -39,10 +39,10 @@ class helper_wordpress_xmlrpc
      *
      * @return string the resultant XML-RPC request string
      */
-    private function request_getUserBlogs(&$options = null)//$username = null, $password = null)
+    private function request_getUserBlogs($options = null)//$username = null, $password = null)
     {
         if(!isset($options))
-            $options = &$this->m_keys;
+            $options = $this->m_keys;
 
         // @todo: bulletproof this
         $method = xmlrpc_encode_request(
@@ -66,10 +66,10 @@ class helper_wordpress_xmlrpc
      *
      * @return string   the resultant XML-RPC request string
      */
-    private function request_getProfile(&$options = null)//$blog_id = null, $username = null, $password = null)
+    private function request_getProfile($options = null)//$blog_id = null, $username = null, $password = null)
     {
         if(!isset($options))
-            $options = &$this->m_keys;
+            $options = $this->m_keys;
 
         // TODO: bulletproof this
         $method = xmlrpc_encode_request(
@@ -94,10 +94,10 @@ class helper_wordpress_xmlrpc
      *
      * @return string   the resultant XML-RPC request string
      */
-    private function request_newPost_initial(&$postinfo, &$options = null)//$blog_id = null, $username = null, $password = null, $post_type, $post_status)
+    private function request_newPost_initial($postinfo, $options = null)//$blog_id = null, $username = null, $password = null, $post_type, $post_status)
     {
         if(!isset($options))
-            $options = &$this->m_keys;
+            $options = $this->m_keys;
 
         $method = xmlrpc_encode_request(
             'wp.newPost',
@@ -106,11 +106,24 @@ class helper_wordpress_xmlrpc
                 $options['username'],
                 $options['password'],
                 array(
-
+                    // post_type
+                    'post_type' => isset($postinfo['post_type'])? $postinfo['post_type'] : 'page',
+                    // post_status
+                    'post_status' => isset($postinfo['post_status'])? $postinfo['post_status'] : 'publish',
+                    // post_title
+                    'post_title' => $postinfo['post_title'],
+                    // post_author
+                    'post_author' => $options['user_id'],
+                    // post_excerpt
+                    'post_excerpt' => substr($postinfo['post_content'], 0, 55),
+                    'post_content' => $postinfo['post_content']
                 )
             )
         );
 
+        print_r($method);
+
+        return $method;
     }
 
 
@@ -141,6 +154,7 @@ class helper_wordpress_xmlrpc
         );
 
         $response = xmlrpc_decode($file);
+        print_r($response);
         if ($response && xmlrpc_is_fault($response)) {
             // TODO: signal fault
         }
@@ -157,7 +171,7 @@ class helper_wordpress_xmlrpc
         $response = $this->do_xmlrpc(
             $this->request_getUserBlogs()
         );
-        print_r($response); 
+        //print_r($response); 
         if ($response && xmlrpc_is_fault($response)) {
             //trigger_error("xmlrpc: $response[faultString] ($response[faultCode])");
             
@@ -167,10 +181,10 @@ class helper_wordpress_xmlrpc
         }
     }
 
-    public function getUserId(&$options = null)//$blog_id, $username, $password)
+    public function getUserId($options = null)//$blog_id, $username, $password)
     {
         if(!isset($options))
-            $options = &$this->m_keys;
+            $options = $this->m_keys;
 
 
         $response = $this->do_xmlrpc(
@@ -180,6 +194,21 @@ class helper_wordpress_xmlrpc
         //print_r($response); 
         return array($response['user_id'], $response['display_name']);
     }
+
+    public function makePostNaive($postinfo, $options = null)
+    {
+        if(!isset($postinfo))
+            return -1; // signal failure
+
+        if(!isset($options))
+            $options = $this->m_keys;
+
+        $response = $this->do_xmlrpc(
+            $this->request_newPost_initial($postinfo, $options)
+        );
+        print_r($response);
+
+    }
 }
 
 
@@ -187,8 +216,8 @@ class helper_wordpress_xmlrpc
 
 
 $assignmenttoexport = array(
-    'title' => 'My Assignment',
-    'body' => 'Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.',
+    'post_title' => 'My Assignment',
+    'post_content' => 'Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.',
     'submittedfile' => null
 );
 
@@ -197,16 +226,16 @@ $assignmenttoexport = array(
 <pre>
 <?php
 print_r($assignmenttoexport);
-?>
-</pre>
-<textarea style="width:480px; height:640px;"><?php
 
 // instantiate a site interface
 $mysiteinterface = new helper_wordpress_xmlrpc("http://temp.jethachan.net/",'jethac', 'e@stc1vl');
 
-// get the id of the blog (usually 1, but let's not be messy.)
-
-
+?>
+</pre>
+<textarea style="width:480px; height:640px;">
+<?php
+// maek post!
+$mysiteinterface->makePostNaive($assignmenttoexport);
 
 
 //echo helper_wordpress_xmlrpc::request_getUserBlogs("jethac", "e@stc1vl");
