@@ -15,9 +15,14 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
  
 /**
- * @package    portfolio
- * @subpackage wordpress
+ * @package    portfolio_wordpress
  * @copyright 2014 Jetha Chan
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-$string['pluginname'] = 'WordPress'
+$string['pluginname'] = 'WordPress';
+$string['label-wordpress-url'] = 'URL of your WordPress blog (no trailing slash)';
+$string['label-wordpress-username'] = 'Username';
+$string['label-wordpress-password'] = 'Password';
+$string['defaulttext-wordpress-url'] = 'http://yourwordpressblogurl.com';
+$string['defaulttext-wordpress-username'] = 'Your username...';
+$string['defaulttext-wordpress-password'] = 'Your password...';
