@@ -27,19 +27,27 @@
 
 require_once($CFG->libdir.'/portfolio/plugin.php');
 
+require_once('helper_wordpress_xmlrpc.php');
+
 class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 {
+    private $xmlrpchelper;
+
     public static function get_name()
     {
         return get_string('pluginname', 'portfolio_wordpress');
     }
 
+    // PLUGIN FUNCTIONS ###################################################
 
     /** 
      * Does anything necessary to prepare the package for sending.
      */
     public function prepare_package()
     {
+
+
+
         return true;
     }
 
@@ -57,7 +65,6 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
     public function get_interactive_continue_url()
     {       
     }
-
 
     /**
      * Return how long a transfer can reasonably expect to take.
@@ -79,8 +86,6 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         return array(PORTFOLIO_FORMAT_FILE, PORTFOLIO_FORMAT_RICHHTML);
     }
 
-    // User configuration -----------------------------------------------------
-
     /** 
      * Whether or not this plugin is user-configurable.
      *
@@ -97,7 +102,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      *                  it by this function
      */
     public function user_config_form(&$mform) {
-
+ 
         // WordPress URL
         $mform->addElement(
             'text',
@@ -148,6 +153,181 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         $mform->addRule('wordpress-username', $strrequired, 'required', null, 'client');
         $mform->addRule('wordpress-password', $strrequired, 'required', null, 'client');
 
+    }
+
+    public function get_allowed_user_config(){
+        return array(
+            'config',
+            'submitbutton',
+            'wordpress-url',
+            'wordpress-username',
+            'wordpress-password',
+            'wordpress-blog-id',
+            'wordpress-user-id',
+            'wordpress-user-nicename'
+        );
+    }
+
+    public function user_config_validation($data)
+    {
+        global $USER;
+        
+        $wp_blog_id = $this->util_useBlog(
+            $this->request_getUserBlogs(
+                $data['wordpress-username'],
+                $data['wordpress-password']
+            ),
+            $data['wordpress-url'] . '/xmlrpc.php'
+        );
+
+        $wp_userdata = $this->util_getUserData(
+            $wp_blog_id,        
+            $data['wordpress-username'],
+            $data['wordpress-password'],
+            $data['wordpress-url'] . '/xmlrpc.php'
+        );
+        
+
+
+        $this->set_user_config(
+            array(
+                'wordpress-blog-id' => $wp_blog_id,
+                'wordpress-user-id' => $wp_userdata[0],
+                'wordpress-user-nicename' => $wp_userdata[1]                
+            ),
+            $USER->id
+        );
+        
+    }
+
+
+    // WORDPRESS XML-RPC API REQUEST STRINGBUILDERS #######################
+
+    /**
+     * Create an XML-RPC request string that retrieves an array of blogs on the
+     * WordPress server that have the requesting user as a contributor.
+     *
+     * @param string    username   the username of the user
+     * @param string    password   the password of the user  
+     *
+     * @return string the resultant XML-RPC request string
+     */
+    private function request_getUserBlogs($username, $password)
+    {
+        $userid = $this->user->id;
+
+        if(!isset($username))
+            $username = $this->userconfig[$userid]->{'wordpress-username'};
+
+        if(!isset($password))
+            $password = $this->userconfig[$userid]->{'wordpress-password'};
+
+        // @todo: bulletproof this
+        $method = xmlrpc_encode_request(
+            'wp.getUsersBlogs', 
+            array(
+                $username,
+                $password
+            )
+        );
+
+        return $method;
+    }
+
+    /**
+     * Create an XML-RPC request string that retrieves the profile of the 
+     * specified user.
+     *
+     * @param int       $blog_id   the blog_id of the WordPress blog
+     * @param string    $username   the username of the user
+     * @param string    $password   the password of the user
+     *
+     * @return string   the resultant XML-RPC request string
+     */
+    private function request_getProfile($blog_id, $username, $password)
+    {
+        $userid = $this->user->id;       
+
+
+        // TODO: bulletproof this
+        $method = xmlrpc_encode_request(
+            'wp.getProfile', 
+            array(
+                $blog_id,
+                $username,
+                $password
+            )
+        );
+
+        return $method;
+    }
+
+    // WORDPRESS XML-RPC API UTILITIES ####################################
+
+    /**
+     * Perform an XML-RPC request, given a well-formed XML-RPC request and a url.
+     * 
+     * @return mixed    an array, integer, string or boolean according to the
+     *                  response received
+     */
+    private function util_doxmlrpc($requeststring, $xmlrpcurl = null)
+    {
+
+        if(!isset($xmlrpcurl))
+            $xmlrpcurl = $this->m_keys['xmlrpcurl'];
+
+        $context = stream_context_create(array('http' => array(
+            'method' => "POST",
+            'header' => "Content-Type: text/xml",
+            'content' => $requeststring
+        )));
+
+        $file = file_get_contents(
+            $xmlrpcurl,
+            false,
+            $context
+        );
+
+        $response = xmlrpc_decode($file);
+        //print_r($file);
+        //print_r($response);
+        if (is_array($response) && xmlrpc_is_fault($response)) {
+            // TODO: signal fault
+        }
+
+        return $response;
+    }
+
+    private function util_useBlog($requeststring = null, $xmlrpcurl = null, $p_idx = 0)
+    {
+        if(is_null($requeststring))
+            $requeststring = $this->request_getUserBlogs();
+
+        $response = $this->util_doxmlrpc(
+            $requeststring,
+            $xmlrpcurl
+        );
+        if (is_array($response) && xmlrpc_is_fault($response)) {
+            throw new portfolio_plugin_exception('xmlrpcfault', 'portfolio_wordpress');
+        } else {
+            return count($response) > 0 ? $response[$p_idx]['blogid'] : 0;
+        }
+    }
+
+    private function util_getUserData($blog_id, $username, $password, $xmlrpcurl)
+    {
+        $response = $this->util_doxmlrpc(
+            $this->request_getProfile($blog_id, $username, $password),
+            $xmlrpcurl
+        );
+        /*
+        ?>
+        <textarea><?php print_r ($response); ?></textarea>
+        <?php
+        */
+        
+        //print_r($response); 
+        return array($response['user_id'], $response['display_name']);
     }
 }
 
