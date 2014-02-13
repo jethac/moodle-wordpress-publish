@@ -18,6 +18,13 @@ class helper_wordpress_xmlrpc
         // @todo: wordpress multi-blog support?
         $this->m_keys['blog_id'] = $this->useBlog();
         echo 'blog id:' . $this->m_keys['blog_id'];
+
+        // get the user id        
+        $foo = $this->getUserId();
+        $this->m_keys['user_id'] = $foo[0];
+        $this->m_keys['display_name'] = $foo[1];
+        echo 'user id:' . $this->m_keys['user_id'] . '<br/>';
+        echo 'user name:' . $this->m_keys['display_name'] . '<br/>';
     }
 
 
@@ -27,24 +34,22 @@ class helper_wordpress_xmlrpc
      * Create an XML-RPC request string that retrieves an array of blogs on the
      * WordPress server that have the requesting user as a contributor.
      *
-     * @param string    $username   the username of the user
-     * @param string    $password   the password of the user  
+     * @param string    username   the username of the user
+     * @param string    password   the password of the user  
      *
      * @return string the resultant XML-RPC request string
      */
-    private function request_getUserBlogs($username = null, $password = null)
+    private function request_getUserBlogs(&$options = null)//$username = null, $password = null)
     {
-        if(!isset($username))
-            $username = $this->m_keys['username'];
-        if(!isset($password))
-            $password = $this->m_keys['password'];
+        if(!isset($options))
+            $options = &$this->m_keys;
 
         // @todo: bulletproof this
         $method = xmlrpc_encode_request(
             'wp.getUsersBlogs', 
             array(
-                $username,
-                $password
+                $options['username'],
+                $options['password']
             )
         );
 
@@ -61,22 +66,18 @@ class helper_wordpress_xmlrpc
      *
      * @return string   the resultant XML-RPC request string
      */
-    private function request_getProfile($blog_id = null, $username = null, $password = null)
+    private function request_getProfile(&$options = null)//$blog_id = null, $username = null, $password = null)
     {
-        if(!isset($blog_id))
-            $blog_id = $this->m_keys['blog_id'];
-        if(!isset($username))
-            $username = $this->m_keys['username'];
-        if(!isset($password))
-            $password = $this->m_keys['password'];
+        if(!isset($options))
+            $options = &$this->m_keys;
 
         // TODO: bulletproof this
         $method = xmlrpc_encode_request(
             'wp.getProfile', 
             array(
-                $blog_id,
-                $username,
-                $password
+                $options['blog_id'],
+                $options['username'],
+                $options['password']
             )
         );
 
@@ -93,21 +94,17 @@ class helper_wordpress_xmlrpc
      *
      * @return string   the resultant XML-RPC request string
      */
-    private function request_newPost_initial($blog_id = null, $username = null, $password = null, $post_type, $post_status)
+    private function request_newPost_initial(&$postinfo, &$options = null)//$blog_id = null, $username = null, $password = null, $post_type, $post_status)
     {
-        if(!isset($blog_id))
-            $blog_id = $this->m_keys['blog_id'];
-        if(!isset($username))
-            $username = $this->m_keys['username'];
-        if(!isset($password))
-            $password = $this->m_keys['password'];
+        if(!isset($options))
+            $options = &$this->m_keys;
 
         $method = xmlrpc_encode_request(
             'wp.newPost',
             array(
-                $this->m_keys['blog_id'],
-                $this->m_keys['username'],
-                $this->m_keys['password'],
+                $options['blog_id'],
+                $options['username'],
+                $options['password'],
                 array(
 
                 )
@@ -170,26 +167,18 @@ class helper_wordpress_xmlrpc
         }
     }
 
-    public function getUserId($blog_id, $username, $password)
+    public function getUserId(&$options = null)//$blog_id, $username, $password)
     {
-
-        if(!isset($blog_id))
-            $blog_id = $this->m_keys['blog_id'];
-        if(!isset($username))
-            $username = $this->m_keys['username'];
-        if(!isset($password))
-            $password = $this->m_keys['password'];
+        if(!isset($options))
+            $options = &$this->m_keys;
 
 
-        $request = $this->request_getProfile($blog_id, $username, $password);
-
-        $context = stream_context_create(array('http' => array(
-            'method' => "POST",
-            'header' => "Content-Type: text/xml",
-            'content' => $request
-        )));
-
-
+        $response = $this->do_xmlrpc(
+            $this->request_getProfile($options)
+        );
+        
+        //print_r($response); 
+        return array($response['user_id'], $response['display_name']);
     }
 }
 
