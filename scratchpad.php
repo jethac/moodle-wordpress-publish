@@ -20,14 +20,15 @@ class helper_wordpress_xmlrpc
         echo 'blog id:' . $this->m_keys['blog_id'];
     }
 
-    // PRIVATE:
+
+    // WordPress API REQUEST STRING BUILDERS ##################################
 
     /**
      * Create an XML-RPC request string that retrieves an array of blogs on the
      * WordPress server that have the requesting user as a contributor.
      *
-     * @param string    $username   the username of the user in question
-     * @param string    $password   the password of the user in question     
+     * @param string    $username   the username of the user
+     * @param string    $password   the password of the user  
      *
      * @return string the resultant XML-RPC request string
      */
@@ -50,14 +51,13 @@ class helper_wordpress_xmlrpc
         return $method;
     }
 
-
     /**
      * Create an XML-RPC request string that retrieves the profile of the 
      * specified user.
      *
-     * @param int       $blog_id   the username of the user in question
-     * @param string    $username   the username of the user in question
-     * @param string    $password   the password of the user in question    
+     * @param int       $blog_id   the blog_id of the WordPress blog
+     * @param string    $username   the username of the user
+     * @param string    $password   the password of the user
      *
      * @return string   the resultant XML-RPC request string
      */
@@ -83,8 +83,16 @@ class helper_wordpress_xmlrpc
         return $method;
     }
 
-
-
+    /**
+     * Create an XML-RPC request string that requests a new post of specified
+     * type and status be made.
+     *
+     * @param int       $blog_id   the blog_id of the WordPress blog
+     * @param string    $username   the username of the user
+     * @param string    $password   the password of the user
+     *
+     * @return string   the resultant XML-RPC request string
+     */
     private function request_newPost_initial($blog_id = null, $username = null, $password = null, $post_type, $post_status)
     {
         if(!isset($blog_id))
@@ -107,6 +115,9 @@ class helper_wordpress_xmlrpc
         );
 
     }
+
+
+    // HELPERS ################################################################
 
     /**
      * Perform an XML-RPC request, given a well-formed XML-RPC request and a url.
@@ -132,13 +143,16 @@ class helper_wordpress_xmlrpc
             $context
         );
 
+        $response = xmlrpc_decode($file);
         if ($response && xmlrpc_is_fault($response)) {
             // TODO: signal fault
         }
 
-
-        return xmlrpc_decode($file);
+        return $response;
     }
+
+
+    // PUBLIC FUNCTIONS ###################################################
 
     // PUBLIC:
     public function useBlog($p_idx = 0)
@@ -146,27 +160,6 @@ class helper_wordpress_xmlrpc
         $response = $this->do_xmlrpc(
             $this->request_getUserBlogs()
         );
-        /*
-        $request = $this->request_getUserBlogs();
-
-        $context = stream_context_create(array('http' => array(
-            'method' => "POST",
-            'header' => "Content-Type: text/xml",
-            'content' => $request
-        )));
-
-        //echo $request;
-        //echo $this->m_keys['wordpressurl'] . "xmlrpc.php";
-
-        $file = file_get_contents(
-            $this->m_keys['xmlrpcurl'],
-            false,
-            $context
-        );
-
-        //print_r ($file);
-        $response = xmlrpc_decode($file);
-            */
         print_r($response); 
         if ($response && xmlrpc_is_fault($response)) {
             //trigger_error("xmlrpc: $response[faultString] ($response[faultCode])");
