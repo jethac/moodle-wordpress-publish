@@ -20,6 +20,7 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 $string['pluginname'] = 'WordPress';
+$string['label-wordpress-enabled'] = 'Enabled';
 $string['label-wordpress-url'] = 'URL of your WordPress blog (no trailing slash)';
 $string['label-wordpress-username'] = 'Username';
 $string['label-wordpress-password'] = 'Password';

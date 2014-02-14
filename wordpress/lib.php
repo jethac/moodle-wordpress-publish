@@ -26,8 +26,11 @@
 //defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir.'/portfolio/plugin.php');
+require_once($CFG->libdir.'/filelib.php');
+
 
 require_once('helper_wordpress_xmlrpc.php');
+
 
 class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 {
@@ -82,86 +85,99 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         */
         foreach ($files as $file) {
 
-            // TODO: This probably isn't the best way of doing this.
-            $tmpfilepath = $tmproot .'/'.$file->get_contenthash();
-            $file->copy_content_to($tmpfilepath);    
-            $domdoc = new DOMDocument();
-            $domdoc->loadHTMLFile($tmpfilepath);
+
+            // Infer from filename how we should handle things.   
+            $filename_info = new SplFileInfo($file->get_filename());
+            $filename_extension = $filename_info->getExtension();
+            $filename_base = $filename_info->getBasename($filename_extension);
 
 
-            $cells = $domdoc->getElementsByTagName('td');
-            $td_header = $cells->item(1);
-            $td_content = $cells->item($cells->length-1);
-        
-            $div_subject = $td_header->getElementsByTagName('div')->item(0);
+            $field_subject = $filename_base;
+            $field_message = "";
 
-            // Extract:
-            //  - subject
-            $field_subject = $div_subject->textContent;            
-            //  - message
-            $field_message = $domdoc->saveHTML($td_content);//$td_content->textContent;
 
-            // Prepare:                
-            $postinfo = array(
-                    'post_title' => $field_subject,
-                    'post_content' => $field_message,
-                    'post_author' => $options['wordpress-user-id']
+            if($filename_extension === 'html')
+            {
+
+                // HTML ######################################################
+                $domdoc = new DOMDocument();
+
+                // TODO: This probably isn't the best way of doing this.
+                $tmpfilepath = $tmproot .'/'.$file->get_contenthash();
+                $file->copy_content_to($tmpfilepath);
+
+                $domdoc->loadHTMLFile($tmpfilepath);
+
+                $cells = $domdoc->getElementsByTagName('td');
+                $td_header = $cells->item(1);            
+                $div_subject = $td_header->getElementsByTagName('div')->item(0);
+
+                // Extract:
+                //  - subject
+                $field_subject = $div_subject->textContent;            
+                //  - message
+                $field_message = "";
+
+
+                if($filename_base === "discussion")
+                {
+
+                    // DISCUSSION
+                    // just dump raw HTML.
+                    $field_message = $domdoc->saveHTML();
+
+                } else if ($filename_base === "post") {
+
+                    // POST
+                    // only dump the HTML in the content TD.
+                    $td_content = $cells->item($cells->length-1);
+                    $field_message = $domdoc->saveHTML(
+                        $td_content
+                    );
+
+                }
+
+                // Prepare:                
+                $postinfo = array(
+                        'post_title' => $field_subject,
+                        'post_content' => $field_message,
+                        'post_author' => $options['wordpress-user-id']
+                    );
+
+                $this->util_makePost(
+                    $postinfo,
+                    $options['wordpress-blog-id'],//$blog_id,
+                    $options['wordpress-username'],//$username,
+                    $options['wordpress-password'],//$password,
+                    $options['wordpress-url'] . '/xmlrpc.php'//$xmlrpcurl
                 );
 
-            // Post:
-            $this->util_makePostNaive(
-                $postinfo,
-                $options['wordpress-blog-id'],//$blog_id,
-                $options['wordpress-username'],//$username,
-                $options['wordpress-password'],//$password,
-                $options['wordpress-url'] . '/xmlrpc.php'//$xmlrpcurl
-            );
-            //echo $file->get_filepath();
-            /*
-        ?>
-        <pre><?php print_r($div_subject); ?></pre>
-        <h3><?php echo $field_subject; ?></h3>
-        <div><?php echo $field_message; ?></div>
-        <?php
-        */
+            } else// if ($filename_extension === 'jpeg')
+            {
+
+                $mimeinfo = & get_mimetypes_array();
+
+                // OTHER #####################################################
+                $fileinfo = array(
+                    'name' => $file->get_filename(),
+                    'type' => $mimeinfo[$filename_extension]['type'],
+                    'bits' => $file->get_content()
+                    );
+
+                $this->util_uploadFile(
+                    $fileinfo,
+                    $options['wordpress-blog-id'],
+                    $options['wordpress-username'],
+                    $options['wordpress-password'],
+                    $options['wordpress-url'] . '/xmlrpc.php'
+                );
+
+
+                //var_dump($filename_extension);
+            }
+
 
         }
-
-        /*
-        ?>
-        <pre><?php print_r(); ?></pre>
-        <?php
-        
-        $post = $this->exporter->caller->post;
-        */
-
-        /*
-        $postinfo = array(
-                'post_title' => $post['subject'],
-                'post_content' => $post['message'],
-                'post_author' => $options['wordpress-user-id']
-            );
-            */
-
-
-        //print_r($this);//->userconfig);
-        /*
-        $this->util_makePostNaive(
-            array(
-                'post_title' => $this->exporter['subject'],
-                'post_content' => $this->exporter['message'],
-                'post_author' => $options['wordpress-user-id']
-            ),
-            $options['wordpress-blog-id'],//$blog_id,
-            $options['wordpress-username'],//$username,
-            $options['wordpress-password'],//$password,
-            $options['wordpress-url'] . '/xmlrpc.php'//$xmlrpcurl
-        );*/
-        
-
-        //print_r($this->exporter);
-        //$this->util_makePostNaive(
-        //);
     }
 
     /**
@@ -194,6 +210,15 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
     }
 
     /** 
+     * Whether or not this plugin has user-configurable export options.
+     *
+     * @return array    formats supported by this plugin
+     */
+    public function has_export_config() {
+        return true;
+    }
+
+    /** 
      * Whether or not this plugin is user-configurable.
      *
      * @return array    formats supported by this plugin
@@ -210,6 +235,21 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      */
     public function user_config_form(&$mform) {
  
+        // enabled
+        $mform->addElement(
+            'checkbox',
+            'wordpress-enabled',
+            get_string('label-wordpress-enabled', 'portfolio_wordpress')
+        );
+        $mform->setType(
+            'wordpress-enabled',
+            PARAM_BOOL
+        );
+        $mform->setDefault(
+            'wordpress-enabled',
+            false//get_string('defaulttext-wordpress-url', 'portfolio_wordpress')
+        );
+
         // WordPress URL
         $mform->addElement(
             'text',
@@ -222,7 +262,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         );
         $mform->setDefault(
             'wordpress-url',
-            get_string('defaulttext-wordpress-url', 'portfolio_wordpress')
+            ''//get_string('defaulttext-wordpress-url', 'portfolio_wordpress')
         );
 
         // WordPress auth
@@ -238,7 +278,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         );
         $mform->setDefault(
             'wordpress-username',
-            get_string('defaulttext-wordpress-username', 'portfolio_wordpress')
+            ''//get_string('defaulttext-wordpress-username', 'portfolio_wordpress')
         );
         $mform->addElement(
             'passwordunmask',
@@ -251,14 +291,19 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         );
         $mform->setDefault(
             'wordpress-password',
-            get_string('defaulttext-wordpress-password', 'portfolio_wordpress')
+            ''//get_string('defaulttext-wordpress-password', 'portfolio_wordpress')
         );
 
         // rules
         $strrequired = get_string('required');
-        $mform->addRule('wordpress-url', $strrequired, 'required', null, 'client');
-        $mform->addRule('wordpress-username', $strrequired, 'required', null, 'client');
-        $mform->addRule('wordpress-password', $strrequired, 'required', null, 'client');
+        //$mform->addRule('wordpress-enabled', $strrequired, 'required', null, 'client');
+
+        //$mform->addRule('wordpress-url', $strrequired, 'required', null, 'client');
+        //$mform->addRule('wordpress-username', $strrequired, 'required', null, 'client');
+        //$mform->addRule('wordpress-password', $strrequired, 'required', null, 'client');
+        $mform->disabledIf('wordpress-url', 'wordpress-enabled');
+        $mform->disabledIf('wordpress-username', 'wordpress-enabled');
+        $mform->disabledIf('wordpress-password', 'wordpress-enabled');
 
     }
 
@@ -271,11 +316,19 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             'wordpress-password',
             'wordpress-blog-id',
             'wordpress-user-id',
-            'wordpress-user-nicename'
+            'wordpress-user-nicename',
+            'wordpress-enabled'
         );
     }
 
-    public function user_config_validation($data)
+    /**
+     * Perform user config validation.
+     *
+     * @param array     $data   post data to verify
+     *
+     * @return string the resultant XML-RPC request string
+     */
+    public function user_config_validation(array $data)
     {
         global $USER;
         
@@ -294,8 +347,6 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             $data['wordpress-url'] . '/xmlrpc.php'
         );
         
-
-
         $this->set_user_config(
             array(
                 'wordpress-blog-id' => $wp_blog_id,
@@ -303,8 +354,15 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
                 'wordpress-user-nicename' => $wp_userdata[1]                
             ),
             $USER->id
-        );
-        
+        );        
+    }
+
+
+
+    public function export_config_validation(array $data)
+    {
+        print_r($data);
+        echo "BOO";
     }
 
 
@@ -403,6 +461,34 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         return $method;
     }
 
+    /**
+     * Create an XML-RPC request string for uploading a file.
+     *
+     * @param array     $fileinfo   information about the file, as well as its bytes
+     * @param int       $blog_id    the blog_id of the WordPress blog
+     * @param string    $username   the username of the user
+     * @param string    $password   the password of the user
+     *
+     * @return string   the resultant XML-RPC request string
+     */
+    private function request_uploadFile(array $fileinfo, $blog_id, $username, $password)
+    {
+
+        $method = xmlrpc_encode_request(
+            'wp.uploadFile',
+            array(
+                $blog_id,
+                $username,
+                $password,
+                $fileinfo
+            )
+        );
+
+        //print_r($method);
+
+        return $method;
+    }
+
 
     // WORDPRESS XML-RPC API UTILITIES ####################################
 
@@ -423,6 +509,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             'header' => "Content-Type: text/xml",
             'content' => $requeststring
         )));
+
+        var_dump($xmlrpcurl);
 
         $file = file_get_contents(
             $xmlrpcurl,
@@ -472,7 +560,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         return array($response['user_id'], $response['display_name']);
     }
 
-    public function util_makePostNaive($postinfo, $blog_id, $username, $password, $xmlrpcurl)
+    public function util_makePost(array $postinfo, $blog_id, $username, $password, $xmlrpcurl)
     {
         if(!isset($postinfo))
             return -1; // signal failure
@@ -496,6 +584,28 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         }
         
         return (int)$response;
+    }
+
+    public function util_uploadFile(array $fileinfo, $blog_id, $username, $password, $xmlrpcurl)
+    {
+        if(!isset($fileinfo))
+            return -1; // signal failure
+
+        $reqstring = $this->request_uploadFile($fileinfo, $blog_id, $username, $password);
+
+        $response = $this->util_doxmlrpc(
+            $reqstring,
+            $xmlrpcurl
+        );
+
+        print_r($response);
+
+        if (is_array($response) && xmlrpc_is_fault($response)) {
+            throw new portfolio_plugin_exception('xmlrpcfault', 'portfolio_wordpress');
+        }
+        
+        return (int)$response;
+
     }
 }
 
