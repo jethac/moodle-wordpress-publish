@@ -45,8 +45,9 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      */
     public function prepare_package()
     {
+        $files = $this->exporter->get_tempfiles();
 
-
+        //print_r($this->exporter);
 
         return true;
     }
@@ -55,7 +56,88 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      * Actually send the package to the remote system.
      */
     public function send_package()
-    {       
+    {
+        global $DB;
+
+        $userid = $this->user->id;//USER->id;
+        $options = $DB->get_records_menu(
+            'portfolio_instance_user',
+            array(
+                'instance'=> $this->id,
+                'userid' => $userid
+            ),
+            '',
+            'name, value'
+
+        );
+        //print_r($options);
+
+        $tmproot = make_temp_directory('wordpressupload');
+
+        $files = $this->exporter->get_tempfiles();
+
+        foreach ($files as $file) {
+
+            // TODO: This probably isn't the best way of doing this.
+            $tmpfilepath = $tmproot .'/'.$file->get_contenthash();
+            $file->copy_content_to($tmpfilepath);            
+
+            $domdoc = new DOMDocument();
+            $domdoc->loadHTMLFile($tmpfilepath);
+
+
+            $cells = $domdoc->getElementsByTagName('td');
+            $td_header = $cells->item(1);
+            $td_content = $cells->item($cells->length-1);
+
+            // Extract:
+            //  - subject
+            $field_subject = $cells->getElementsByTagName('div')->item(0)->textContent;
+            //  - message
+
+            //echo $file->get_filepath();
+        ?>
+        <pre><?php print_r($field_subject); ?></pre>
+        <pre><?php print_r($td_content); ?></pre>
+        <?php
+
+        }
+
+        /*
+        ?>
+        <pre><?php print_r(); ?></pre>
+        <?php
+        
+        $post = $this->exporter->caller->post;
+        */
+
+        /*
+        $postinfo = array(
+                'post_title' => $post['subject'],
+                'post_content' => $post['message'],
+                'post_author' => $options['wordpress-user-id']
+            );
+            */
+
+
+        //print_r($this);//->userconfig);
+        /*
+        $this->util_makePostNaive(
+            array(
+                'post_title' => $this->exporter['subject'],
+                'post_content' => $this->exporter['message'],
+                'post_author' => $options['wordpress-user-id']
+            ),
+            $options['wordpress-blog-id'],//$blog_id,
+            $options['wordpress-username'],//$username,
+            $options['wordpress-password'],//$password,
+            $options['wordpress-url'] . '/xmlrpc.php'//$xmlrpcurl
+        );*/
+        
+
+        //print_r($this->exporter);
+        //$this->util_makePostNaive(
+        //);
     }
 
     /**
@@ -63,7 +145,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      * link.
      */
     public function get_interactive_continue_url()
-    {       
+    {
+        return "http://www.google.com";
     }
 
     /**
@@ -216,12 +299,6 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
     {
         $userid = $this->user->id;
 
-        if(!isset($username))
-            $username = $this->userconfig[$userid]->{'wordpress-username'};
-
-        if(!isset($password))
-            $password = $this->userconfig[$userid]->{'wordpress-password'};
-
         // @todo: bulletproof this
         $method = xmlrpc_encode_request(
             'wp.getUsersBlogs', 
@@ -261,6 +338,47 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 
         return $method;
     }
+
+    /**
+     * Create an XML-RPC request string that requests a new post of specified
+     * type and status be made.
+     *
+     * @param int       $blog_id   the blog_id of the WordPress blog
+     * @param string    $username   the username of the user
+     * @param string    $password   the password of the user
+     *
+     * @return string   the resultant XML-RPC request string
+     */
+    private function request_newPost_initial($postinfo, $blog_id, $username, $password)
+    {
+
+        $method = xmlrpc_encode_request(
+            'wp.newPost',
+            array(
+                $blog_id,
+                $username,
+                $password,
+                array(
+                    // post_type
+                    'post_type' => isset($postinfo['post_type'])? $postinfo['post_type'] : 'page',
+                    // post_status
+                    'post_status' => isset($postinfo['post_status'])? $postinfo['post_status'] : 'publish',
+                    // post_title
+                    'post_title' => $postinfo['post_title'],
+                    // post_author
+                    'post_author' => $postinfo['post_author'],
+                    // post_excerpt
+                    'post_excerpt' => substr($postinfo['post_content'], 0, 55),
+                    'post_content' => $postinfo['post_content']
+                )
+            )
+        );
+
+        //print_r($method);
+
+        return $method;
+    }
+
 
     // WORDPRESS XML-RPC API UTILITIES ####################################
 
@@ -328,6 +446,30 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         
         //print_r($response); 
         return array($response['user_id'], $response['display_name']);
+    }
+
+    public function util_makePostNaive($postinfo, $blog_id, $username, $password, $xmlrpcurl)
+    {
+        if(!isset($postinfo))
+            return -1; // signal failure
+
+        $reqstring = $this->request_newPost_initial($postinfo, $blog_id, $username, $password);
+        ?>
+        <textarea><?php print_r ($reqstring); ?></textarea>
+        <?php
+        /*
+        $response = $this->do_xmlrpc(
+            $reqstring,
+            $xmlrpcurl
+        );
+
+        print_r($response);
+
+        if (is_array($response) && xmlrpc_is_fault($response)) {
+            throw new portfolio_plugin_exception('xmlrpcfault', 'portfolio_wordpress');
+        }
+        */
+        return;// (int)$response;
     }
 }
 
