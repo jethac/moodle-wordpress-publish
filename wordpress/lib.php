@@ -75,13 +75,16 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         $tmproot = make_temp_directory('wordpressupload');
 
         $files = $this->exporter->get_tempfiles();
-
+/*
+        ?>
+        <pre><?php print_r($files); ?></pre> 
+        <?php
+        */
         foreach ($files as $file) {
 
             // TODO: This probably isn't the best way of doing this.
             $tmpfilepath = $tmproot .'/'.$file->get_contenthash();
-            $file->copy_content_to($tmpfilepath);            
-
+            $file->copy_content_to($tmpfilepath);    
             $domdoc = new DOMDocument();
             $domdoc->loadHTMLFile($tmpfilepath);
 
@@ -89,17 +92,38 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             $cells = $domdoc->getElementsByTagName('td');
             $td_header = $cells->item(1);
             $td_content = $cells->item($cells->length-1);
+        
+            $div_subject = $td_header->getElementsByTagName('div')->item(0);
 
             // Extract:
             //  - subject
-            $field_subject = $cells->getElementsByTagName('div')->item(0)->textContent;
+            $field_subject = $div_subject->textContent;            
             //  - message
+            $field_message = $domdoc->saveHTML($td_content);//$td_content->textContent;
 
+            // Prepare:                
+            $postinfo = array(
+                    'post_title' => $field_subject,
+                    'post_content' => $field_message,
+                    'post_author' => $options['wordpress-user-id']
+                );
+
+            // Post:
+            $this->util_makePostNaive(
+                $postinfo,
+                $options['wordpress-blog-id'],//$blog_id,
+                $options['wordpress-username'],//$username,
+                $options['wordpress-password'],//$password,
+                $options['wordpress-url'] . '/xmlrpc.php'//$xmlrpcurl
+            );
             //echo $file->get_filepath();
+            /*
         ?>
-        <pre><?php print_r($field_subject); ?></pre>
-        <pre><?php print_r($td_content); ?></pre>
+        <pre><?php print_r($div_subject); ?></pre>
+        <h3><?php echo $field_subject; ?></h3>
+        <div><?php echo $field_message; ?></div>
         <?php
+        */
 
         }
 
@@ -454,11 +478,13 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             return -1; // signal failure
 
         $reqstring = $this->request_newPost_initial($postinfo, $blog_id, $username, $password);
+        /*
         ?>
         <textarea><?php print_r ($reqstring); ?></textarea>
         <?php
-        /*
-        $response = $this->do_xmlrpc(
+        */
+        
+        $response = $this->util_doxmlrpc(
             $reqstring,
             $xmlrpcurl
         );
@@ -468,8 +494,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         if (is_array($response) && xmlrpc_is_fault($response)) {
             throw new portfolio_plugin_exception('xmlrpcfault', 'portfolio_wordpress');
         }
-        */
-        return;// (int)$response;
+        
+        return (int)$response;
     }
 }
 
