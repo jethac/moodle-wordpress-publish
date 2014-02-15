@@ -253,7 +253,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             get_string('label-wordpress-export-type', 'portfolio_wordpress'),
             array(
                 'page' => get_string('label-wordpress-export-type-page', 'portfolio_wordpress'),
-                'post' => get_string('label-wordpress-export-type-post', 'portfolio_wordpress')
+                'post' => get_string('label-wordpress-export-type-post', 'portfolio_wordpress'),
+                'derp' => 'WHAT'
             )
         );
         $mform->setType(
@@ -263,14 +264,28 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         $select->setSelected('wordpress-export-type');
     }
 
+    /**
+     * Just like the moodle form validation function.
+     * This is passed in the data array from the form
+     * and if a non empty array is returned, form processing will stop.
+     *
+     * @param array $data data from form.
+     */
     public function export_config_validation(array $data)
     {
+        $errorstrings = array();
+
         $this->exportsettings['publish'] = array_key_exists('wordpress-export-publish', $data);
         $this->exportsettings['post_type'] = $data['wordpress-export-type'];
 
-        print_r($data);
-        echo "BOO";
-        var_dump($exportsettings);
+        if(!($data['wordpress-export-type'] === 'page' || $data['wordpress-export-type'] === 'post'))
+        {
+            $errorstrings['wordpress-export-type'] = get_string('label-wordpress-export-type-unsupported', 'portfolio_wordpress');
+            $this->exportsettings['post_type'] = 'unsupported';
+        }
+
+        if(count($errorstrings) > 0)
+            return $errorstrings;
     }
 
     public function get_export_summary()
@@ -280,7 +295,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
                 $this->exportsettings['publish']? get_string('yes') : get_string('no'),
 
             get_string('label-wordpress-export-type', 'portfolio_wordpress') =>
-                $this->exportsettings['post_type']
+                get_string('label-wordpress-export-type-' . $this->exportsettings['post_type'], 'portfolio_wordpress')
             );
     }
 

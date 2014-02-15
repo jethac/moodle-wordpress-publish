@@ -30,5 +30,7 @@ $string['defaulttext-wordpress-password'] = 'Your password...';
 
 $string['label-wordpress-export-publish'] = "Publish immediately?";
 $string['label-wordpress-export-type'] = "Post type";
+
 $string['label-wordpress-export-type-page'] = "Page";
 $string['label-wordpress-export-type-post'] = "Post";
+$string['label-wordpress-export-type-unsupported'] = "Unsupported post type";
