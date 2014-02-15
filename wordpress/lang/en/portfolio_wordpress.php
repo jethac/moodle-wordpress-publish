@@ -27,3 +27,8 @@ $string['label-wordpress-password'] = 'Password';
 $string['defaulttext-wordpress-url'] = 'http://yourwordpressblogurl.com';
 $string['defaulttext-wordpress-username'] = 'Your username...';
 $string['defaulttext-wordpress-password'] = 'Your password...';
+
+$string['label-wordpress-export-publish'] = "Publish immediately?";
+$string['label-wordpress-export-type'] = "Post type";
+$string['label-wordpress-export-type-page'] = "Page";
+$string['label-wordpress-export-type-post'] = "Post";

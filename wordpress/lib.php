@@ -36,6 +36,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 {
     private $xmlrpchelper;
 
+    private $exportsettings = array();
+
     public static function get_name()
     {
         return get_string('pluginname', 'portfolio_wordpress');
@@ -44,7 +46,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
     // PLUGIN FUNCTIONS ###################################################
 
     /** 
-     * Does anything necessary to prepare the package for sending.
+     * Does anything necessary to prepare the package for sending; typically, 
+     * read the temporary files and zip them, etc.
      */
     public function prepare_package()
     {
@@ -57,6 +60,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 
     /**
      * Actually send the package to the remote system.
+     *
+     * @return bool success
      */
     public function send_package()
     {
@@ -186,6 +191,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      */
     public function get_interactive_continue_url()
     {
+        // TODO: Replace with actual thing.
         return "http://www.google.com";
     }
 
@@ -216,6 +222,66 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      */
     public function has_export_config() {
         return true;
+    }
+    /** 
+     * Extends the default export configuration form.
+     *
+     * @param object    moodleform object to have additional elements added to
+     *                  it by this function
+     */
+    public function export_config_form(&$mform)
+    {
+        // auto-publish
+        $mform->addElement(
+            'checkbox',
+            'wordpress-export-publish',
+            get_string('label-wordpress-export-publish', 'portfolio_wordpress')
+        );
+        $mform->setType(
+            'wordpress-export-publish',
+            PARAM_BOOL
+        );
+        $mform->setDefault(
+            'wordpress-export-publish',
+            false
+        );
+
+        // post type
+        $select = $mform->addElement(
+            'select',
+            'wordpress-export-type',
+            get_string('label-wordpress-export-type', 'portfolio_wordpress'),
+            array(
+                'page' => get_string('label-wordpress-export-type-page', 'portfolio_wordpress'),
+                'post' => get_string('label-wordpress-export-type-post', 'portfolio_wordpress')
+            )
+        );
+        $mform->setType(
+            'wordpress-export-type',
+            PARAM_TEXT
+        );
+        $select->setSelected('wordpress-export-type');
+    }
+
+    public function export_config_validation(array $data)
+    {
+        $this->exportsettings['publish'] = array_key_exists('wordpress-export-publish', $data);
+        $this->exportsettings['post_type'] = $data['wordpress-export-type'];
+
+        print_r($data);
+        echo "BOO";
+        var_dump($exportsettings);
+    }
+
+    public function get_export_summary()
+    {
+        return array(                
+            get_string('label-wordpress-export-publish', 'portfolio_wordpress') =>
+                $this->exportsettings['publish']? get_string('yes') : get_string('no'),
+
+            get_string('label-wordpress-export-type', 'portfolio_wordpress') =>
+                $this->exportsettings['post_type']
+            );
     }
 
     /** 
@@ -358,12 +424,6 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
     }
 
 
-
-    public function export_config_validation(array $data)
-    {
-        print_r($data);
-        echo "BOO";
-    }
 
 
     // WORDPRESS XML-RPC API REQUEST STRINGBUILDERS #######################
