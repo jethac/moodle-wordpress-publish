@@ -37,6 +37,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
     private $xmlrpchelper;
 
     private $exportsettings = array();
+    private $exportpackage = array();
 
     public static function get_name()
     {
@@ -47,13 +48,94 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 
     /** 
      * Does anything necessary to prepare the package for sending; typically, 
-     * read the temporary files and zip them, etc.
+     * read the temporary files and zip them, etc. - but we probably won't be
+     * doing a packaged-up file dump just yet, since WordPress out the box 
+     * doesn't really deal with that (or at least it doesn't over XML-RPC).
      */
     public function prepare_package()
     {
+        $tmproot = make_temp_directory('wordpressupload');
         $files = $this->exporter->get_tempfiles();
 
-        //print_r($this->exporter);
+        $this->exportpackage = array();
+
+        foreach ($files as $file) {
+
+            // Infer from filename how we should handle things.   
+            $filename_info = new SplFileInfo($file->get_filename());
+            $filename_extension = $filename_info->getExtension();
+            $filename_base = $filename_info->getBasename($filename_extension);
+
+            $field_subject = $filename_base;
+            $field_message = "";
+
+            if($filename_extension === 'html')
+            {
+
+                // HTML ######################################################
+                $domdoc = new DOMDocument();
+
+                // TODO: This probably isn't the best way of doing this.
+                $tmpfilepath = $tmproot .'/'.$file->get_contenthash();
+                $file->copy_content_to($tmpfilepath);
+
+                $domdoc->loadHTMLFile($tmpfilepath);
+
+                $cells = $domdoc->getElementsByTagName('td');
+                $td_header = $cells->item(1);            
+                $div_subject = $td_header->getElementsByTagName('div')->item(0);
+
+                // Extract:
+                //  - subject
+                $field_subject = $div_subject->textContent;            
+                //  - message
+                $field_message = "";
+
+                if ($filename_base === "post") {
+
+                    // POST
+                    // only dump the HTML in the content TD; looks better
+                    $td_content = $cells->item($cells->length-1);
+                    $field_message = $domdoc->saveHTML(
+                        $td_content
+                    );
+
+                } else// if($filename_base === "discussion")
+                {
+
+                    // DISCUSSION / OTHERWISE
+                    // just dump raw HTML.
+                    $field_message = $domdoc->saveHTML();
+
+                }
+
+                $domdoc = null;
+                unlink($tmpfilepath);
+
+                // Prepare:                
+                $postinfo = array(
+                        'package_type' => 'html',
+                        'post_title' => $field_subject,
+                        'post_content' => $field_message,
+                        'post_author' => $options['wordpress-user-id']
+                    );
+
+                array_push($this->exportpackage, $postinfo);
+            } else
+            {
+                $mimeinfo = & get_mimetypes_array();
+
+                // OTHER #####################################################
+                $fileinfo = array(
+                    'package_type' => 'raw',
+                    'name' => $file->get_filename(),
+                    'type' => $mimeinfo[$filename_extension]['type'],
+                    'bits' => $file->get_content()
+                    );
+
+                array_push($this->exportpackage, $fileinfo);
+            }
+        }
 
         return true;
     }
@@ -67,7 +149,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
     {
         global $DB;
 
-        $userid = $this->user->id;//USER->id;
+        // Get export options out of the DB.
+        $userid = $this->user->id;
         $options = $DB->get_records_menu(
             'portfolio_instance_user',
             array(
@@ -76,18 +159,35 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             ),
             '',
             'name, value'
-
         );
-        //print_r($options);
 
-        $tmproot = make_temp_directory('wordpressupload');
+        // Process "packages".
+        foreach($this->exportpackage as $package)
+        {
+            if($package['package_type'] == 'html')
+            {
+                $this->util_makePost(
+                    $package,
+                    $options['wordpress-blog-id'],
+                    $options['wordpress-username'],
+                    $options['wordpress-password'],
+                    $options['wordpress-url'] . '/xmlrpc.php'
+                );
+            }
+            else if($package['package_type'] == 'raw')
+            {
+                $this->util_uploadFile(
+                    $package,
+                    $options['wordpress-blog-id'],
+                    $options['wordpress-username'],
+                    $options['wordpress-password'],
+                    $options['wordpress-url'] . '/xmlrpc.php'
+                );
+            }
+        }
 
+        /*
         $files = $this->exporter->get_tempfiles();
-/*
-        ?>
-        <pre><?php print_r($files); ?></pre> 
-        <?php
-        */
         foreach ($files as $file) {
 
 
@@ -180,9 +280,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 
                 //var_dump($filename_extension);
             }
-
-
         }
+*/
     }
 
     /**
@@ -223,6 +322,17 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
     public function has_export_config() {
         return true;
     }
+
+    /**
+     * This plugin provides WordPress export settings on a per-user basis; there
+     * is very little meaning in allowing multiple instances.
+     *
+     * @return bool
+     */
+    public static function allows_multiple_instances() {
+        return false;
+    }
+
     /** 
      * Extends the default export configuration form.
      *
@@ -266,8 +376,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 
     /**
      * Just like the moodle form validation function.
-     * This is passed in the data array from the form
-     * and if a non empty array is returned, form processing will stop.
+     * This is passed in the data array from the form and if a non empty array
+     * is returned, form processing will stop.
      *
      * @param array $data data from form.
      */
@@ -288,6 +398,13 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             return $errorstrings;
     }
 
+    /**
+     * Returns information to be displayed to the user after export config 
+     * submission.
+     *
+     * @return array    a table of nice strings => values summarising user
+     *                  configuration choices.
+     */
     public function get_export_summary()
     {
         return array(                
@@ -567,6 +684,23 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 
     // WORDPRESS XML-RPC API UTILITIES ####################################
 
+    public static function util_xmlrpc_errorhandler($errno, $errstr, $errfile, $errline)
+    {
+        if (!(error_reporting() & $errno)) {
+            // This error code is not included in error_reporting
+            return;
+        }
+
+        switch ($errno) {
+            case E_WARNING:
+                throw new portfolio_plugin_exception(
+                    'xmlrpcfault',
+                    'portfolio_wordpress'
+                );
+                break;
+        }
+    }
+
     /**
      * Perform an XML-RPC request, given a well-formed XML-RPC request and a url.
      * 
@@ -579,26 +713,31 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         if(!isset($xmlrpcurl))
             $xmlrpcurl = $this->m_keys['xmlrpcurl'];
 
-        $context = stream_context_create(array('http' => array(
-            'method' => "POST",
-            'header' => "Content-Type: text/xml",
-            'content' => $requeststring
-        )));
+        set_error_handler("portfolio_plugin_wordpress::util_xmlrpc_errorhandler");
 
-        var_dump($xmlrpcurl);
+            $context = stream_context_create(array('http' => array(
+                'method' => "POST",
+                'header' => "Content-Type: text/xml",
+                'content' => $requeststring
+            )));
 
-        $file = file_get_contents(
-            $xmlrpcurl,
-            false,
-            $context
-        );
+            //var_dump($xmlrpcurl);
 
-        $response = xmlrpc_decode($file);
+            $file = file_get_contents(
+                $xmlrpcurl,
+                false,
+                $context
+            );
+
+            $response = xmlrpc_decode($file);
+
         //print_r($file);
         //print_r($response);
         if (is_array($response) && xmlrpc_is_fault($response)) {
-            // TODO: signal fault
+            return false;
         }
+
+        restore_error_handler();
 
         return $response;
     }
@@ -680,8 +819,9 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         }
         
         return (int)$response;
-
     }
+
+
 }
 
 ?>

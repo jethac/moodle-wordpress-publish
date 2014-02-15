@@ -34,3 +34,6 @@ $string['label-wordpress-export-type'] = "Post type";
 $string['label-wordpress-export-type-page'] = "Page";
 $string['label-wordpress-export-type-post'] = "Post";
 $string['label-wordpress-export-type-unsupported'] = "Unsupported post type";
+
+
+$string['xmlrpcfault'] = "XML-RPC Fault (is the WordPress blog URL correct?)";
