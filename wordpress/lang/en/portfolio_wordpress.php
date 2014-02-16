@@ -35,5 +35,7 @@ $string['label-wordpress-export-type-page'] = "Page";
 $string['label-wordpress-export-type-post'] = "Post";
 $string['label-wordpress-export-type-unsupported'] = "Unsupported post type";
 
+$string['label-wordpress-error-disabled'] = "WordPress portfolio disabled";
+
 
 $string['xmlrpcfault'] = "XML-RPC Fault (is the WordPress blog URL correct?)";
