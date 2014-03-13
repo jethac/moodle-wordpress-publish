@@ -23,12 +23,12 @@
  
 defined('MOODLE_INTERNAL') || die();
  
-$plugin->version   = 2014021300;
+$plugin->version   = 2014031300;
 $plugin->requires  = 2013111800; // See http://docs.moodle.org/dev/Moodle_Versions
 $plugin->cron      = 0;
 $plugin->component = 'portfolio_wordpress';
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.x (Build: 2014021300)';
+$plugin->release   = '0.x (Build: 2014031300)';
  
 $plugin->dependencies = array(
 //    'mod_forum' => ANY_VERSION,

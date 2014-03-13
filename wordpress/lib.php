@@ -447,6 +447,35 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 
         // WordPress auth
         // TODO: OAuth using Jetpack instead of (in addition to?) this
+        $modeselector = array();
+        $modeselector[] =& $mform->createElement(
+            'radio',
+            'wordpress-naivejetpack',
+            '',
+            get_string('label-wordpress-title-oauth2', 'portfolio_wordpress'),
+            1,
+            null
+        );
+        $modeselector[] =& $mform->createElement(
+            'radio',
+            'wordpress-naivejetpack',
+            '',
+            get_string('label-wordpress-title-xmlrpc', 'portfolio_wordpress'),
+            0,
+            null
+        );
+        $mform->addGroup($modeselector, 'modeselector', 'Connection mode', array(' '), false);
+        $mform->addElement('html', 
+            '<p>' . get_string('label-wordpress-disclaimer-oauth2', 'portfolio_wordpress') . '</p>'
+        );
+
+        //$naivexmlrpc_elements = array();
+        //$naivexmlrpc_elements[] =&
+        $mform->addElement(
+            'header',
+            'Naive XML-RPC',
+            get_string('label-wordpress-title-xmlrpc', 'portfolio_wordpress')
+        );
         $mform->addElement(
             'text',
             'wordpress-username',
@@ -460,6 +489,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             'wordpress-username',
             ''//get_string('defaulttext-wordpress-username', 'portfolio_wordpress')
         );
+        //$naivexmlrpc_elements[] =&
         $mform->addElement(
             'passwordunmask',
             'wordpress-password',
@@ -473,12 +503,18 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             'wordpress-password',
             ''//get_string('defaulttext-wordpress-password', 'portfolio_wordpress')
         );
+        //$mform->addGroup($naivexmlrpc_elements, 'xml-rpc', '', array(' '), false)
+
 
         // rules
         $strrequired = get_string('required');
         $mform->disabledIf('wordpress-url', 'wordpress-enabled');
+
+        // xml-rpc
         $mform->disabledIf('wordpress-username', 'wordpress-enabled');
         $mform->disabledIf('wordpress-password', 'wordpress-enabled');
+        $mform->disabledIf('wordpress-username', 'wordpress-naivejetpack', 'eq', 1);
+        $mform->disabledIf('wordpress-password', 'wordpress-naivejetpack', 'eq', 1);
 
     }
 
