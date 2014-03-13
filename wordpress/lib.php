@@ -512,8 +512,6 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      */
     private function request_getUserBlogs($username, $password)
     {
-        $userid = $this->user->id;
-
         // @todo: bulletproof this
         $method = xmlrpc_encode_request(
             'wp.getUsersBlogs', 
@@ -539,9 +537,7 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
      */
     private function request_getProfile($blog_id, $username, $password)
     {
-        $userid = $this->user->id;       
-
-
+        
         // TODO: bulletproof this
         $method = xmlrpc_encode_request(
             'wp.getProfile', 
