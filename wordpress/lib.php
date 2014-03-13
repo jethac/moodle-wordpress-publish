@@ -29,9 +29,6 @@ require_once($CFG->libdir.'/portfolio/plugin.php');
 require_once($CFG->libdir.'/filelib.php');
 
 
-require_once('helper_wordpress_xmlrpc.php');
-
-
 class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 {
     private $xmlrpchelper;
