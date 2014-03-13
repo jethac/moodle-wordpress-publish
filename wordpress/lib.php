@@ -41,6 +41,18 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         return get_string('pluginname', 'portfolio_wordpress');
     }
 
+    // Plugin capabilities.
+    public static function has_admin_config() {
+        return true;
+    }
+    public function has_export_config() {
+        return true;
+    }
+    public function has_user_config() {
+        return true;
+    }
+
+
     // PLUGIN FUNCTIONS ###################################################
 
     /** 
@@ -214,15 +226,6 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         return array(PORTFOLIO_FORMAT_FILE, PORTFOLIO_FORMAT_RICHHTML);
     }
 
-    /** 
-     * Whether or not this plugin has user-configurable export options.
-     *
-     * @return array    formats supported by this plugin
-     */
-    public function has_export_config() {
-        return true;
-    }
-
     /**
      * This plugin provides WordPress export settings on a per-user basis; there
      * is very little meaning in allowing multiple instances.
@@ -322,89 +325,30 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             return $errorstrings;
     }
 
-
-
-
-    /**
-     * Just like the moodle form validation function.
-     * This is passed in the data array from the form and if a non empty array
-     * is returned, form processing will stop.
-     *
-     * @param array $data data from form.
-     */
-    public function user_config_validation(array $data)
-    {
-        global $USER;
-        
-        //var_dump($data);
-        $errorstrings = array();
-
-        $wordpressenabled = array_key_exists('wordpress-enabled', $data);
-
-        $extra_userconfigopts = array();
-
-
-        $extra_userconfigopts['wordpress-enabled'] = $wordpressenabled;
-
-        if($wordpressenabled)
-        {
-            $wp_blog_id = $this->util_useBlog(
-                $this->request_getUserBlogs(
-                    $data['wordpress-username'],
-                    $data['wordpress-password']
-                ),
-                $data['wordpress-url'] . '/xmlrpc.php'
-            );
-
-            $wp_userdata = $this->util_getUserData(
-                $wp_blog_id,        
-                $data['wordpress-username'],
-                $data['wordpress-password'],
-                $data['wordpress-url'] . '/xmlrpc.php'
-            );
-
-            $extra_userconfigopts['wordpress-blog-id'] = $wp_blog_id;
-            $extra_userconfigopts['wordpress-user-id'] = $wp_userdata[0];
-            $extra_userconfigopts['wordpress-user-nicename'] = $wp_userdata[1];
-        }
-        
-        //var_dump($extra_userconfigopts);
-
-        $this->set_user_config(
-            $extra_userconfigopts,
-            $USER->id
-        );        
-
-        
-        return $errorstrings;
-    }
-
-
-    /**
-     * Returns information to be displayed to the user after export config 
-     * submission.
-     *
-     * @return array    a table of nice strings => values summarising user
-     *                  configuration choices.
-     */
-    public function get_export_summary()
-    {
-        return array(                
-            get_string('label-wordpress-export-publish', 'portfolio_wordpress') =>
-                $this->exportsettings['publish']? get_string('yes') : get_string('no'),
-
-            get_string('label-wordpress-export-type', 'portfolio_wordpress') =>
-                get_string('label-wordpress-export-type-' . $this->exportsettings['post_type'], 'portfolio_wordpress')
-            );
-    }
-
     /** 
-     * Whether or not this plugin is user-configurable.
+     * Extends the default admin configuration form.
      *
-     * @return array    formats supported by this plugin
+     * @param object    moodleform object to have additional elements added to
+     *                  it by this function
      */
-    public function has_user_config() {
-        return true;
+    public static function admin_config_form(&$mform){
+        // OAuth2 Client ID
+        $mform->addElement(
+            'text',
+            'wordpress-oauth2-clientid',
+            get_string('label-wordpress-oauth2-clientid', 'portfolio_wordpress')
+        );
+        $mform->setType(
+            'wordpress-oauth2-clientid',
+            PARAM_TEXT
+        );
+        $mform->setDefault(
+            'wordpress-oauth2-clientid',
+            ''
+        );
+
+        $strrequired = get_string('required');
+        $mform->addRule('wordpress-oauth2-clientid', $strrequired, 'required', null, 'server');
     }
 
     /** 
@@ -469,11 +413,10 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             '<p>' . get_string('label-wordpress-disclaimer-oauth2', 'portfolio_wordpress') . '</p>'
         );
 
-        //$naivexmlrpc_elements = array();
-        //$naivexmlrpc_elements[] =&
+        // XML-RPC.
         $mform->addElement(
             'header',
-            'Naive XML-RPC',
+            'naivexmlrpc',
             get_string('label-wordpress-title-xmlrpc', 'portfolio_wordpress')
         );
         $mform->addElement(
@@ -487,9 +430,8 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         );
         $mform->setDefault(
             'wordpress-username',
-            ''//get_string('defaulttext-wordpress-username', 'portfolio_wordpress')
+            ''
         );
-        //$naivexmlrpc_elements[] =&
         $mform->addElement(
             'passwordunmask',
             'wordpress-password',
@@ -501,9 +443,15 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
         );
         $mform->setDefault(
             'wordpress-password',
-            ''//get_string('defaulttext-wordpress-password', 'portfolio_wordpress')
+            ''
         );
-        //$mform->addGroup($naivexmlrpc_elements, 'xml-rpc', '', array(' '), false)
+
+        // OAuth2.
+        $mform->addElement(
+            'header',
+            'jsonoauth2',
+            get_string('label-wordpress-title-oauth2', 'portfolio_wordpress')
+        );
 
 
         // rules
@@ -518,11 +466,74 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
 
     }
 
+    /**
+     * Just like the moodle form validation function.
+     * This is passed in the data array from the form and if a non empty array
+     * is returned, form processing will stop.
+     *
+     * @param array $data data from form.
+     */
+    public function user_config_validation(array $data)
+    {
+        global $USER;
+        
+        //var_dump($data);
+        $errorstrings = array();
+
+        $wordpressenabled = array_key_exists('wordpress-enabled', $data);
+
+        $extra_userconfigopts = array();
+
+
+        $extra_userconfigopts['wordpress-enabled'] = $wordpressenabled;
+
+        if($wordpressenabled)
+        {
+            $wp_blog_id = $this->util_useBlog(
+                $this->request_getUserBlogs(
+                    $data['wordpress-username'],
+                    $data['wordpress-password']
+                ),
+                $data['wordpress-url'] . '/xmlrpc.php'
+            );
+
+            $wp_userdata = $this->util_getUserData(
+                $wp_blog_id,        
+                $data['wordpress-username'],
+                $data['wordpress-password'],
+                $data['wordpress-url'] . '/xmlrpc.php'
+            );
+
+            $extra_userconfigopts['wordpress-blog-id'] = $wp_blog_id;
+            $extra_userconfigopts['wordpress-user-id'] = $wp_userdata[0];
+            $extra_userconfigopts['wordpress-user-nicename'] = $wp_userdata[1];
+        }
+        
+        //var_dump($extra_userconfigopts);
+
+        $this->set_user_config(
+            $extra_userconfigopts,
+            $USER->id
+        );        
+
+        
+        return $errorstrings;
+    }
+
+    public static function get_allowed_config(){
+        return array(
+            'config',
+            'submitbutton',
+            'wordpress-oauth2-clientid'
+        );
+    }
+
     public function get_allowed_user_config(){
         return array(
             'config',
             'submitbutton',
             'wordpress-url',
+            'wordpress-naivejetpack',
             'wordpress-username',
             'wordpress-password',
             'wordpress-blog-id',
@@ -531,6 +542,25 @@ class portfolio_plugin_wordpress extends portfolio_plugin_push_base
             'wordpress-enabled'
         );
     }
+
+    /**
+     * Returns information to be displayed to the user after export config 
+     * submission.
+     *
+     * @return array    a table of nice strings => values summarising user
+     *                  configuration choices.
+     */
+    public function get_export_summary()
+    {
+        return array(                
+            get_string('label-wordpress-export-publish', 'portfolio_wordpress') =>
+                $this->exportsettings['publish']? get_string('yes') : get_string('no'),
+
+            get_string('label-wordpress-export-type', 'portfolio_wordpress') =>
+                get_string('label-wordpress-export-type-' . $this->exportsettings['post_type'], 'portfolio_wordpress')
+            );
+    }
+
 
 
 

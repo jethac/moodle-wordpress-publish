@@ -43,3 +43,4 @@ $string['xmlrpcfault'] = "XML-RPC Fault (is the WordPress blog URL correct?)";
 $string['label-wordpress-title-xmlrpc'] = "Naive XML-RPC";
 $string['label-wordpress-title-oauth2'] = "OAuth2";
 $string['label-wordpress-disclaimer-oauth2'] = "OAuth2 is safer and requires either a wordpress.com blog or a blog with Jetpack installed.";
+$string['label-wordpress-oauth2-clientid'] = "OAuth2 Client ID";
